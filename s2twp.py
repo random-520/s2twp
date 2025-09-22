@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from opencc import OpenCC
 from docx import Document
-import subprocess
 
 # -------------------- 文件 Tab --------------------
 class FileTab(QWidget):
@@ -50,19 +49,31 @@ class FileTab(QWidget):
 
     def open_selected_file(self):
         item = self.file_list.currentItem()
-        if item and os.path.exists(item.text()):
-            os.startfile(item.text())
+        if item:
+            file_path = os.path.abspath(item.text())
+            if os.path.exists(file_path):
+                try:
+                    os.startfile(file_path)
+                except Exception as e:
+                    QMessageBox.warning(self, "错误", f"无法打开文件:\n{e}")
+            else:
+                QMessageBox.warning(self, "错误", "文件不存在！")
         else:
-            QMessageBox.warning(self, "错误", "文件不存在！")
+            QMessageBox.warning(self, "错误", "未选择文件！")
 
     def open_file_location(self):
         item = self.file_list.currentItem()
         if item:
-            folder = os.path.dirname(item.text())
-            if os.path.exists(folder):
-                os.startfile(folder)
+            folder_path = os.path.abspath(os.path.dirname(item.text()))
+            if os.path.exists(folder_path):
+                try:
+                    os.startfile(folder_path)
+                except Exception as e:
+                    QMessageBox.warning(self, "错误", f"无法打开文件夹:\n{e}")
             else:
                 QMessageBox.warning(self, "错误", "文件夹不存在！")
+        else:
+            QMessageBox.warning(self, "错误", "未选择文件！")
 
 # -------------------- 主程序 --------------------
 class ConverterApp(QWidget):
@@ -182,6 +193,7 @@ class ConverterApp(QWidget):
             new_file = self.convert_file(path)
             if new_file:
                 file_list_widget.addItem(new_file)
+                file_list_widget.setCurrentRow(file_list_widget.count() - 1)  # 自动选中最新文件
         elif os.path.isdir(path):
             for root, dirs, files in os.walk(path):
                 for file in files:
@@ -190,10 +202,12 @@ class ConverterApp(QWidget):
                         new_file = self.convert_file(full_path)
                         if new_file:
                             file_list_widget.addItem(new_file)
+                            file_list_widget.setCurrentRow(file_list_widget.count() - 1)  # 自动选中最新文件
 
     def convert_file(self, filepath):
         try:
             ext = os.path.splitext(filepath)[1].lower()
+            new_file = ""
             if ext in ('.txt', '.md', '.html', '.htm'):
                 with open(filepath, 'rb') as f:
                     raw = f.read()
@@ -201,14 +215,14 @@ class ConverterApp(QWidget):
                 encoding = detected['encoding'] or 'utf-8'
                 text = raw.decode(encoding, errors='ignore')
                 converted = self.cc.convert(text)
-                new_file = f"{os.path.splitext(filepath)[0]}_tw{ext}"
+                new_file = os.path.abspath(f"{os.path.splitext(filepath)[0]}_tw{ext}")
                 with open(new_file, 'w', encoding='utf-8') as f:
                     f.write(converted)
             elif ext == '.docx':
                 doc = Document(filepath)
                 for p in doc.paragraphs:
                     p.text = self.cc.convert(p.text)
-                new_file = f"{os.path.splitext(filepath)[0]}_tw.docx"
+                new_file = os.path.abspath(f"{os.path.splitext(filepath)[0]}_tw.docx")
                 doc.save(new_file)
             self.log.append(f"转换成功: {filepath} -> {new_file}")
             return new_file
